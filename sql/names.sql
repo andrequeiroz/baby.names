@@ -1,0 +1,4 @@
+CREATE TABLE names (
+  nm_code SERIAL PRIMARY KEY,
+  nm_label VARCHAR(20) UNIQUE NOT NULL
+);
