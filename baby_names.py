@@ -12,6 +12,7 @@ db_name = "baby_names"
 wrk_dir = "/tmp/"
 names_link = "https://www.ssa.gov/oact/babynames/names.zip"
 namesbystate_link = "https://www.ssa.gov/oact/babynames/state/namesbystate.zip"
+copy_file = open("/tmp/bn_registries", "w+")
 
 # connect to baby_names db (create it if needed)
 try:
@@ -25,7 +26,6 @@ except:
     link = psycopg2.connect(dbname = db_name)
     os.system("psql " + db_name + " < ./sql/names.sql")
     os.system("psql " + db_name + " < ./sql/states.sql")
-    os.system("psql " + db_name + " < ./sql/sexes.sql")
     os.system("psql " + db_name + " < ./sql/registries.sql")
 
 cursor = link.cursor()
@@ -38,9 +38,9 @@ if len(cursor.fetchall()) > 0:
         ans = raw_input("update existing db? [y/n]: ")
         if ans == "n":
             quit()
-        else:
+        elif ans == "y":
             cursor.execute("TRUNCATE TABLE registries")
-            cursor.execute("TRUNCATE TABLE names RESTART IDENTITY")
+            cursor.execute("TRUNCATE TABLE names RESTART IDENTITY CASCADE")
             link.commit()
 
 # download raw files (if needed)
@@ -92,7 +92,7 @@ for archive in os.listdir(wrk_dir + "bn/"):
 names = sorted(list(set(names)))
 
 # populate names table
-print "populating names table - pt I"
+print "populating names table"
 for name in names:
     query = "INSERT INTO names (nm_label) VALUES ('%s')" % name
     cursor.execute(query)
@@ -103,17 +103,24 @@ cursor.execute("SELECT nm_label, nm_code FROM names")
 names = dict(cursor.fetchall())
 
 # populate registries table
-print "populating registries table"
+print "parsing registries - pt I"
 for registry in state_resgistries:
     registry[0] = names.get(registry[0])
-    query = ("INSERT INTO registries VALUES (%s, '%s', %s, '%s', %s)" %
-             tuple(registry))
-    cursor.execute(query)
+    line = "%s\t%s\t%s\t%s\t%s\n" % tuple(registry)
+    copy_file.write(line)
 
+print "populating registries table - pt I"
+copy_file.seek(0)
+cursor.copy_from(copy_file, "registries", null = "")
 link.commit()
 
+# back to the beginning of copy_file to re-write on it
+copy_file.seek(0)
+copy_file.truncate()
+
 # calculation of the difference between total registries and registry by state
-print "populating names table - pt II"
+# and assign it with no state info
+print "parsing registries - pt II"
 for registry in year_registries:
     registry[0] = names.get(registry[0])
     query_select = ("""SELECT sum(total)
@@ -125,16 +132,30 @@ for registry in year_registries:
     if value is not None:
         if value < int(registry[3]):
             registry[3] = int(registry[3]) - value
-            query = ("INSERT INTO registries VALUES (%s, '%s', %s, NULL, %s)" %
-                     tuple(registry))
-            cursor.execute(query)
+            line = "%s\t%s\t%s\tNULL\t%s\n" % tuple(registry)
+            copy_file.write(line)
     elif int(registry[3]) > 0:
-        query = ("INSERT INTO registries VALUES (%s, '%s', %s, NULL, %s)" %
-                 tuple(registry))
-        cursor.execute(query)
+        line = "%s\t%s\t%s\t\t%s\n" % tuple(registry)
+        copy_file.write(line)
 
+print "populating registries table - pt II"
+copy_file.seek(0)
+cursor.copy_from(copy_file, "registries", null = "")
+link.commit()
+
+# set constraints
+cursor.execute("""ALTER TABLE registries
+                  ADD CONSTRAINT name_fk
+                  FOREIGN KEY (nm_code) REFERENCES names (nm_code)""")
+cursor.execute("""ALTER TABLE registries
+                  ADD CONSTRAINT state_fk
+                  FOREIGN KEY (st_abbr) REFERENCES states (st_abbr)""")
+cursor.execute("""ALTER TABLE registries
+                  ADD CONSTRAINT sex_chk
+                  CHECK (sex_code = 'F' OR sex_code = 'M')""")
 link.commit()
 
 # end
+copy_file.close()
 cursor.close()
 link.close()

@@ -13,13 +13,6 @@ I'm definitely not pleased with the processing time! I'll work on it in a near f
 | st_abbr | State's abbreviation code |
 | st_name | Stats's name |
 
-**sexes**
-
-| field | description |
-| --- | --- |
-| sex_code | Sex's code |
-| sex_label | Sex |
-
 **names**
 
 | field | description |
