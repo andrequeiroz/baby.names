@@ -8,7 +8,7 @@ abs_freq_map <- function(name, sex) {
     name <- deparse(substitute(name))
     sex <- deparse(substitute(sex))
 
-    paste0("SELECT LOWER(s.st_abbr) AS state, SUM(r.total) AS total
+    paste0("SELECT lower(s.st_abbr) AS state, sum(r.total) AS total
             FROM registries AS r
              INNER JOIN names AS n ON r.nm_code = n.nm_code
              INNER JOIN states AS s ON r.st_abbr = s.st_abbr
@@ -35,15 +35,15 @@ rel_freq_map <- function(name, sex) {
     sex <- deparse(substitute(sex))
 
     paste0("SELECT res.state_f AS state, res.freq::numeric / res.total AS prop
-            FROM ((SELECT LOWER(s.st_abbr) AS state_f, SUM(r.total) AS freq
+            FROM ((SELECT lower(s.st_abbr) AS state_f, sum(r.total) AS freq
                    FROM registries AS r
                     INNER JOIN names AS n ON r.nm_code = n.nm_code
                     INNER JOIN state AS s ON r.st_abbr = s.st_abbr
                    WHERE r.st_abbr <> 'DC'
                     AND n.nm_label = '", name, "' AND r.sex_code = '", sex, "'
                    GROUP BY s.st_abbr) AS filter
-                   INNER JOIN (SELECT LOWER(s.st_abbr) AS state_t,
-                                SUM(r.total) AS total
+                   INNER JOIN (SELECT lower(s.st_abbr) AS state_t,
+                                sum(r.total) AS total
                                FROM registries AS r
                                 INNER JOIN state AS s ON r.st_abbr = s.st_abbr
                                WHERE r.st_abbr <> 'DC'
@@ -68,7 +68,7 @@ rel_freq_map <- function(name, sex) {
 abs_freq_map(Alexa, F)
 rel_freq_map(Alexa, F)
 
-"SELECT s.st_abbr, n.nm_label, SUM(r.total) AS total
+"SELECT s.st_abbr, n.nm_label, sum(r.total) AS total
  FROM registries AS r
   INNER JOIN names AS n ON r.nm_code = n.nm_code
   INNER JOIN state AS s ON r.st_abbr = s.st_abbr
@@ -78,7 +78,7 @@ rel_freq_map(Alexa, F)
  LIMIT 10" %>%
     dbGetQuery(link, .)
 
-"SELECT r.yob, r.sex_code AS sex, SUM(r.total) AS total
+"SELECT r.yob, r.sex_code AS sex, sum(r.total) AS total
  FROM registries AS r
   INNER JOIN names AS n ON r.nm_code = n.nm_code
  WHERE n.nm_label = 'Alexa'
