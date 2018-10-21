@@ -68,7 +68,7 @@ extract_files("/tmp/namesbystate.zip")
 names = []
 
 # order: name, sex, year, state, count
-state_resgistries = []
+state_registries = []
 
 # order: name, sex, year, count
 year_registries = []
@@ -86,7 +86,7 @@ for archive in os.listdir(wrk_dir + "bn/"):
             order = [3, 1, 2, 0, 4]
             for line in lines:
                 names.append(line[3])
-                state_resgistries.append([line[i] for i in order])
+                state_registries.append([line[i] for i in order])
 
 # unique names list
 names = sorted(list(set(names)))
@@ -104,7 +104,7 @@ names = dict(cursor.fetchall())
 
 # populate registries table
 print "parsing registries - pt I"
-for registry in state_resgistries:
+for registry in state_registries:
     registry[0] = names.get(registry[0])
     line = "%s\t%s\t%s\t%s\t%s\n" % tuple(registry)
     copy_file.write(line)
