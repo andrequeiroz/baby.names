@@ -6,6 +6,7 @@ import psycopg2
 import re
 import urllib
 import zipfile
+import sqlite3
 
 # variables
 db_name = "baby_names"
@@ -121,26 +122,59 @@ copy_file.truncate()
 # calculation of the difference between total registries and registry by state
 # and assign it with no state info
 print "parsing registries - pt II"
-for registry in year_registries:
+
+cursor.execute("""SELECT n.nm_label, r.sex_code, r.yob, sum(total) AS total
+                  FROM registries AS r
+                   INNER JOIN names AS n ON r.nm_code = n.nm_code
+                  GROUP BY n.nm_label, r.sex_code, r.yob""")
+registries = cursor.fetchall()
+registries = [list(i) for i in registries]
+
+link_sqlite = sqlite3.connect(":memory:")
+cursor_sqlite = link_sqlite.cursor()
+
+cursor_sqlite.execute("""CREATE TABLE ano (
+                          nm_label TEXT,
+                          sex_code TEXT,
+                          yob INTEGER,
+                          ano INTEGER)""")
+link_sqlite.commit()
+
+cursor_sqlite.executemany("INSERT INTO ano VALUES (?, ?, ?, ?)", year_registries)
+link_sqlite.commit()
+
+cursor_sqlite.execute("""CREATE TABLE estado (
+                          nm_label TEXT,
+                          sex_code TEXT,
+                          yob INTEGER,
+                          estado INTEGER)""")
+link_sqlite.commit()
+
+cursor_sqlite.executemany("INSERT INTO estado VALUES (?, ?, ?, ?)", registries)
+link_sqlite.commit()
+
+cursor_sqlite.execute("""SELECT a.nm_label, a.sex_code, a.yob, a.ano - coalesce(e.estado, 0) as diff
+                         FROM ano AS a
+                          LEFT OUTER JOIN estado AS e ON a.nm_label = e.nm_label AND
+                                                         a.sex_code = e.sex_code AND
+                                                         a.yob = e.yob
+                         WHERE diff > 0""")
+
+difference = cursor_sqlite.fetchall()
+difference = [list(i) for i in difference]
+
+cursor_sqlite.close()
+link_sqlite.close()
+
+for registry in difference:
     registry[0] = names.get(registry[0])
-    query_select = ("""SELECT sum(total)
-                       FROM registries
-                       WHERE nm_code = %s AND sex_code = '%s'
-                        AND yob = %s""" % tuple(registry[:-1]))
-    cursor.execute(query_select)
-    value = cursor.fetchall()[0][0]
-    if value is not None:
-        if value < int(registry[3]):
-            registry[3] = int(registry[3]) - value
-            line = "%s\t%s\t%s\tNULL\t%s\n" % tuple(registry)
-            copy_file.write(line)
-    elif int(registry[3]) > 0:
-        line = "%s\t%s\t%s\t\t%s\n" % tuple(registry)
+    if registry[3] > 0:
+        line = "%s\t%s\t%s\tNULL\t%s\n" % tuple(registry)
         copy_file.write(line)
 
 print "populating registries table - pt II"
 copy_file.seek(0)
-cursor.copy_from(copy_file, "registries", null = "")
+cursor.copy_from(copy_file, "registries", null = "NULL")
 link.commit()
 
 # set constraints
